@@ -21,16 +21,16 @@ class MyLightningCLI(LightningCLI):
         logger = {
             "class_path": "lightning.pytorch.loggers.TensorBoardLogger",
             "init_args": {
-                "save_dir": "/data/users/upelissier/30-Code/graphnet/",
-                # "save_dir": "/home/eleve05/safran/graphnet/",
+                # "save_dir": "/data/users/upelissier/30-Code/graphnet/",
+                "save_dir": "/home/eleve05/safran/meshgraphnets/",
                 "name": "logs/"
             },
         }
 
         parser.set_defaults(
             {
-                "data.data_dir": "/data/users/upelissier/30-Code/graphnet/data/",
-                # "data.data_dir": "/home/eleve05/safran/graphnet/data/",
+                # "data.data_dir": "/data/users/upelissier/30-Code/graphnet/data/",
+                "data.data_dir": "/home/eleve05/safran/meshgraphnets/data/",
                 "data.dataset_name": "cylinder_flow",
                 "data.field": "velocity",
                 "data.time_steps": 600,
@@ -42,12 +42,12 @@ class MyLightningCLI(LightningCLI):
                 "data.batch_size_valid": 4,
                 "data.batch_size_test": 50,
 
-                "model.path": "/home/upelissier/30-Code/graphnet/",
-                "model.dataset": "/data/users/upelissier/30-Code/graphnet/data/",
-                "model.logs": "/data/users/upelissier/30-Code/graphnet/logs/",
-                # "model.path": "/home/eleve05/safran/graphnet/",
-                # "model.dataset": "/home/eleve05/safran/graphnet/data/",
-                # "model.logs": "/home/eleve05/safran/graphnet/logs/",
+                # "model.path": "/home/upelissier/30-Code/graphnet/",
+                # "model.dataset": "/data/users/upelissier/30-Code/graphnet/data/",
+                # "model.logs": "/data/users/upelissier/30-Code/graphnet/logs/",
+                "model.path": "/home/eleve05/safran/meshgraphnets/",
+                "model.dataset": "/home/eleve05/safran/meshgraphnets/data/",
+                "model.logs": "/home/eleve05/safran/meshgraphnets/logs/",
                 "model.noise_std": 2e-2,
                 "model.num_layers": 10,
                 "model.input_dim_node": 11,
