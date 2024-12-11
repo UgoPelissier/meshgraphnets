@@ -88,11 +88,11 @@ class MeshDataset(Dataset):
     def processed_file_names(self) -> list:
         return glob.glob(os.path.join(self.processed_dir, self.split, 'data_*.pt'))
     
-    def download(self) -> None:
-        print(f'Download dataset {self.dataset_name} to {self.raw_dir}')
-        for file in ['meta.json', 'train.tfrecord', 'valid.tfrecord', 'test.tfrecord']:
-            url = f"https://storage.googleapis.com/dm-meshgraphnets/{self.dataset_name}/{file}"
-            download_url(url=url, folder=self.raw_dir)
+    # def download(self) -> None:
+    #     print(f'Download dataset {self.dataset_name} to {self.raw_dir}')
+    #     for file in ['meta.json', 'train.tfrecord', 'valid.tfrecord', 'test.tfrecord']:
+    #         url = f"https://storage.googleapis.com/dm-meshgraphnets/{self.dataset_name}/{file}"
+    #         download_url(url=url, folder=self.raw_dir)
 
     def triangles_to_edges(self, faces: torch.Tensor) -> torch.Tensor:
         """Computes mesh edges from triangles."""
@@ -170,10 +170,11 @@ class MeshDataset(Dataset):
         # convert data to dict
         ds = tf.data.TFRecordDataset(osp.join(self.raw_dir, f'%s.tfrecord' % self.split))
         ds = ds.map(functools.partial(self._parse, meta=meta), num_parallel_calls=8)
+        ds = ds.prefetch(1)
 
-        data_list = []
         print(f'{self.split} dataset')
-        with alive_bar(total=self.idx_lim*self.time_step_lim) as bar:
+        idx_data = 0
+        with alive_bar(total=self.idx_lim) as bar:
             for idx, data in enumerate(ds):
                 if (idx==self.idx_lim):
                     break
@@ -186,7 +187,6 @@ class MeshDataset(Dataset):
                     if (t==self.time_step_lim):
                         break
                     # get node features
-                    bar()
                     v = d['velocity'][t, :, :]
                     node_type = torch.tensor(np.array(tf.one_hot(tf.convert_to_tensor(data['node_type'][0,:,0]), NodeType.SIZE)))
                     x = torch.cat((v, node_type),dim=-1).type(torch.float)
@@ -204,12 +204,14 @@ class MeshDataset(Dataset):
                     # node outputs, for training (velocity)
                     v_t = d['velocity'][t, :, :]
                     v_tp1 = d['velocity'][t+1, :, :]
-                    y = ((v_tp1-v_t)/meta['dt']).type(torch.float)
+                    y = (v_tp1-v_t).type(torch.float)
 
                     self.update_stats(x, edge_attr, y)
 
                     torch.save(Data(x=x, edge_index=edge_index, edge_attr=edge_attr, y=y, cells=d['cells'], mesh_pos=d['mesh_pos'], n_points=x.shape[0], n_edges=edge_index.shape[1], n_cells=d['cells'].shape[0]),
-                                osp.join(self.processed_dir, self.split, f'data_{idx*self.time_step_lim+t}.pt'))
+                                osp.join(self.processed_dir, self.split, f'data_{idx_data}.pt'))
+                    idx_data += 1
+                bar()
                     
         self.save_stats()
 

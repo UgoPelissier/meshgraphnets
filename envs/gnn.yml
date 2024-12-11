@@ -1,4 +1,4 @@
-name: graphnet
+name: gnn
 channels:
   - pyg
   - pytorch
@@ -280,4 +280,3 @@ dependencies:
     - wrapt==1.14.1
     - yarl==1.9.2
     - zipp==3.15.0
-prefix: /local_scratch/upelissier/.conda/envs/meshnet

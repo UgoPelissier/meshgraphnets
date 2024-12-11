@@ -13,8 +13,6 @@ from model.processor import ProcessorLayer
 import torch
 from torch.nn import Linear, Sequential, LayerNorm, ReLU
 from torch.optim import Optimizer
-from torch.optim.lr_scheduler import ReduceLROnPlateau
-from lightning.fabric.utilities.types import _TORCH_LRSCHEDULER
 
 from torch_geometric.data import Data
 
@@ -56,15 +54,11 @@ class MeshGraphNet(pl.LightningModule):
                                        Linear(hidden_dim, hidden_dim),
                                     #    ReLU(),
                                     #    Linear(hidden_dim, hidden_dim),
-                                    #    ReLU(),
-                                    #    Linear(hidden_dim, hidden_dim),
                                        LayerNorm(hidden_dim))
 
         self.edge_encoder = Sequential(Linear(input_dim_edge, hidden_dim),
                                        ReLU(),
                                        Linear(hidden_dim, hidden_dim),
-                                    #    ReLU(),
-                                    #    Linear(hidden_dim, hidden_dim),
                                     #    ReLU(),
                                     #    Linear(hidden_dim, hidden_dim),
                                        LayerNorm(hidden_dim))
@@ -81,8 +75,6 @@ class MeshGraphNet(pl.LightningModule):
         # decoder: only for node embeddings
         self.decoder = Sequential(Linear(hidden_dim, hidden_dim),
                                   ReLU(),
-                                #   Linear(hidden_dim, hidden_dim),
-                                #   ReLU(),
                                 #   Linear(hidden_dim, hidden_dim),
                                 #   ReLU(),
                                   Linear(hidden_dim, output_dim))
@@ -139,18 +131,18 @@ class MeshGraphNet(pl.LightningModule):
         loss_mask=torch.logical_or((torch.argmax(inputs.x[:,2:],dim=1)==torch.tensor(NodeType.NORMAL)),
                                    (torch.argmax(inputs.x[:,2:],dim=1)==torch.tensor(NodeType.OUTFLOW)))
 
-        # normalize labels with dataset statistics
+        # normalize target with dataset statistics
         if split == 'train':
-            labels = normalize(data=inputs.y, mean=self.mean_vec_y_train, std=self.std_vec_y_train)
+            target_normalized = normalize(data=inputs.y, mean=self.mean_vec_y_train, std=self.std_vec_y_train)
         elif split == 'val':
-            labels = normalize(data=inputs.y, mean=self.mean_vec_y_val, std=self.std_vec_y_val)
+            target_normalized = normalize(data=inputs.y, mean=self.mean_vec_y_val, std=self.std_vec_y_val)
         elif split == 'test':
-            labels = normalize(data=inputs.y, mean=self.mean_vec_y_test, std=self.std_vec_y_test)
+            target_normalized = normalize(data=inputs.y, mean=self.mean_vec_y_test, std=self.std_vec_y_test)
         else:
             raise ValueError(f'Invalid split: {split}')
 
         # find sum of square errors
-        error = torch.sum((labels-pred)**2, dim=1)
+        error = torch.sum((pred-target_normalized)**2, dim=1)
 
         # root and mean the errors for the nodes we calculate loss for
         loss= torch.sqrt(torch.mean(error[loss_mask]))
@@ -190,14 +182,13 @@ class MeshGraphNet(pl.LightningModule):
             self.data_list_prediction += data_list_prediction
             self.data_list_error += data_list_error
 
-            if ((batch_idx%(self.time_step_lim//self.batch_size_test))==((self.time_step_lim//self.batch_size_test)-1)):
-                if (self.test_index in self.test_indices) and self.animate:
-                    save_vtu(self.data_list_true, self.data_list_prediction, self.data_list_error, path=osp.join(self.logs, self.version), index=self.test_index)
+            if self.animate:
+                save_vtu(self.data_list_true, self.data_list_prediction, self.data_list_error, path=osp.join(self.logs, self.version), index=self.test_index)
 
         if ((batch_idx%(self.time_step_lim//self.batch_size_test))==((self.time_step_lim//self.batch_size_test)-1)):
             self.test_index += 1
 
-    def configure_optimizers(self) -> Union[List[Optimizer], Tuple[List[Optimizer], List[Union[_TORCH_LRSCHEDULER, ReduceLROnPlateau]]]]:
+    def configure_optimizers(self) -> Union[List[Optimizer], Tuple[List[Optimizer], None]]:
         """Configure the optimizer and the learning rate scheduler."""
         optimizer = self.optimizer(self.parameters())
 
@@ -238,8 +229,8 @@ class MeshGraphNet(pl.LightningModule):
             prediction = copy.deepcopy(v)
             error = copy.deepcopy(v)
 
-            true = v + y * self.dt
-            prediction += pred * self.dt
+            true = v + y
+            prediction += pred
             error = prediction - true
 
             data_list_true.append(Data(x=true, mesh_pos=mesh_pos, cells=cells))

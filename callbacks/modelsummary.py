@@ -15,6 +15,7 @@ class MyRichModelSummary(RichModelSummary):
         total_parameters: int,
         trainable_parameters: int,
         model_size: float,
+        training_modes
     ) -> None:
 
         console = get_console()
