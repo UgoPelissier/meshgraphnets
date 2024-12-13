@@ -21,14 +21,14 @@ class MyLightningCLI(LightningCLI):
         logger = {
             "class_path": "lightning.pytorch.loggers.TensorBoardLogger",
             "init_args": {
-                "save_dir": "/home/admin-upelissier/Documents/40-Tests/meshgraphnets/",
+                "save_dir": "",
                 "name": "logs/"
             },
         }
 
         parser.set_defaults(
             {
-                "data.data_dir": "/home/admin-upelissier/Documents/40-Tests/meshgraphnets/data/",
+                "data.data_dir": "data/",
                 "data.dataset_name": "cylinder_flow",
                 "data.field": "velocity",
                 "data.time_steps": 600,
@@ -40,9 +40,9 @@ class MyLightningCLI(LightningCLI):
                 "data.batch_size_valid": 4,
                 "data.batch_size_test": 300,
 
-                "model.path": "/home/admin-upelissier/Documents/40-Tests/meshgraphnets/",
-                "model.dataset": "/home/admin-upelissier/Documents/40-Tests/meshgraphnets/data/",
-                "model.logs": "/home/admin-upelissier/Documents/40-Tests/meshgraphnets/logs/",
+                "model.path": "",
+                "model.dataset": "data/",
+                "model.logs": "logs/",
                 "model.noise_std": 2e-2,
                 "model.num_layers": 10,
                 "model.input_dim_node": 11,
