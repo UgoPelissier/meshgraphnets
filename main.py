@@ -10,39 +10,34 @@ class MyLightningCLI(LightningCLI):
     """Custom Lightning CLI to define default arguments."""
     def add_arguments_to_parser(self, parser: LightningArgumentParser) -> None:
         default_callbacks = [
-            {
-                "class_path": "callbacks.modelsummary.MyRichModelSummary",
-            },
-            {
-                "class_path": "callbacks.progressbar.MyProgressBar",
-            }
+            
         ]
 
         logger = {
             "class_path": "lightning.pytorch.loggers.TensorBoardLogger",
             "init_args": {
-                "save_dir": "/home/admin-upelissier/Documents/40-Tests/meshgraphnets/",
+                "save_dir": "/scratch-fast/upelissier/80-Tests/meshgraphnets/",
                 "name": "logs/"
             },
         }
 
         parser.set_defaults(
             {
-                "data.data_dir": "/home/admin-upelissier/Documents/40-Tests/meshgraphnets/data/",
+                "data.data_dir": "/scratch-fast/upelissier/80-Tests/meshgraphnets/data/",
                 "data.dataset_name": "cylinder_flow",
                 "data.field": "velocity",
                 "data.time_steps": 600,
-                "data.idx_lim_train": 50,
-                "data.idx_lim_val": 5,
-                "data.idx_lim_test": 1,
-                "data.time_step_lim": 300,
-                "data.batch_size_train": 32,
-                "data.batch_size_valid": 4,
-                "data.batch_size_test": 300,
+                "data.idx_lim_train": 95,
+                "data.idx_lim_val": 3,
+                "data.idx_lim_test": 2,
+                "data.time_step_lim": 100,
+                "data.batch_size_train": 1,
+                "data.batch_size_valid": 1,
+                "data.batch_size_test": 1,
 
-                "model.path": "/home/admin-upelissier/Documents/40-Tests/meshgraphnets/",
-                "model.dataset": "/home/admin-upelissier/Documents/40-Tests/meshgraphnets/data/",
-                "model.logs": "/home/admin-upelissier/Documents/40-Tests/meshgraphnets/logs/",
+                "model.path": "/scratch-fast/upelissier/80-Tests/meshgraphnets/",
+                "model.dataset": "/scratch-fast/upelissier/80-Tests/meshgraphnets/data/",
+                "model.logs": "/scratch-fast/upelissier/80-Tests/meshgraphnets/logs/",
                 "model.noise_std": 2e-2,
                 "model.num_layers": 10,
                 "model.input_dim_node": 11,
@@ -55,7 +50,7 @@ class MyLightningCLI(LightningCLI):
                 "model.batch_size_test": 1,
                 "model.animate": True,
 
-                "trainer.max_epochs": 1000000,
+                "trainer.max_epochs": 1000,
                 "trainer.accelerator": "gpu",
                 "trainer.devices": 1,
                 "trainer.check_val_every_n_epoch": 1,
