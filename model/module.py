@@ -95,7 +95,7 @@ class MeshGraphNet(pl.LightningModule):
     def build_processor_model(self):
         return ProcessorLayer
 
-    def forward(self, batch: Data, split: str, batch_idx: int):
+    def forward(self, batch: Data, split: str):
         """
         Encoder encodes graph (node/edge features) into latent vectors (node/edge embeddings)
         The return of processor is fed into the processor for generating new feature vectors
@@ -150,7 +150,7 @@ class MeshGraphNet(pl.LightningModule):
 
     def training_step(self, batch: Data, batch_idx: int) -> torch.Tensor:
         """Training step of the model."""
-        pred = self(batch, split='train', batch_idx=batch_idx)
+        pred = self(batch, split='train')
         loss = self.loss(pred, batch, split='train')
         self.log('train/loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return loss
@@ -159,7 +159,7 @@ class MeshGraphNet(pl.LightningModule):
         """Validation step of the model."""
         if self.trainer.sanity_checking:
             self.load_stats()
-        pred = self(batch, split='val', batch_idx=batch_idx)
+        pred = self(batch, split='val')
         loss = self.loss(pred, batch, split='val')
         self.log('valid/loss', loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
         return loss
