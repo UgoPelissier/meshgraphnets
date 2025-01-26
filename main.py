@@ -16,14 +16,14 @@ class MyLightningCLI(LightningCLI):
         logger = {
             "class_path": "lightning.pytorch.loggers.TensorBoardLogger",
             "init_args": {
-                "save_dir": "/scratch-big/upelissier/80-Tests/meshgraphnetsacctime/",
+                "save_dir": "/scratch-big/upelissier/80-Tests/meshgraphnets/",
                 "name": "logs/"
             },
         }
 
         parser.set_defaults(
             {
-                "data.data_dir": "/scratch-big/upelissier/80-Tests/meshgraphnetsacctime/data/",
+                "data.data_dir": "/scratch-big/upelissier/80-Tests/meshgraphnets/data/",
                 "data.dataset_name": "cylinder_flow",
                 "data.field": "velocity",
                 "data.time_steps": 600,
@@ -38,9 +38,9 @@ class MyLightningCLI(LightningCLI):
                 "data.input_dim_edge": 3,
                 "data.output_dim": 2,
 
-                "model.path": "/scratch-big/upelissier/80-Tests/meshgraphnetsacctime/",
-                "model.dataset": "/scratch-big/upelissier/80-Tests/meshgraphnetsacctime/data/",
-                "model.logs": "/scratch-big/upelissier/80-Tests/meshgraphnetsacctime/logs/",
+                "model.path": "/scratch-big/upelissier/80-Tests/meshgraphnets/",
+                "model.dataset": "/scratch-big/upelissier/80-Tests/meshgraphnets/data/",
+                "model.logs": "/scratch-big/upelissier/80-Tests/meshgraphnets/logs/",
                 "model.noise_std": 2e-2,
                 "model.num_layers": 10,
                 "model.input_dim_node": 14,
