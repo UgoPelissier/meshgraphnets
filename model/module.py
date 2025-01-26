@@ -95,7 +95,14 @@ class MeshGraphNet(pl.LightningModule):
     def build_processor_model(self):
         return ProcessorLayer
 
-    def forward(self, batch: Data, split: str):
+    def forward(
+        self,
+        batch: Data,
+        mean_vec_x: torch.Tensor,
+        std_vec_x: torch.Tensor,
+        mean_vec_edge: torch.Tensor,
+        std_vec_edge: torch.Tensor
+    ):
         """
         Encoder encodes graph (node/edge features) into latent vectors (node/edge embeddings)
         The return of processor is fed into the processor for generating new feature vectors
@@ -103,14 +110,12 @@ class MeshGraphNet(pl.LightningModule):
         x, edge_index, edge_attr = batch.x, batch.edge_index.long(), batch.edge_attr
         x[:,:2] += self.v_noise(batch, self.noise_std)
 
-        if split == 'train':
-            x, edge_attr = normalize(data=[x, edge_attr], mean=[self.mean_vec_x_train, self.mean_vec_edge_train], std=[self.std_vec_x_train, self.std_vec_edge_train])
-        elif split == 'val':
-            x, edge_attr = normalize(data=[x, edge_attr], mean=[self.mean_vec_x_val, self.mean_vec_edge_val], std=[self.std_vec_x_val, self.std_vec_edge_val])
-        elif split == 'test':
-            x, edge_attr = normalize(data=[x, edge_attr], mean=[self.mean_vec_x_test, self.mean_vec_edge_test], std=[self.std_vec_x_test, self.std_vec_edge_test])
-        else:
-            raise ValueError(f'Invalid split: {split}')
+        # step 0: normalize
+        x, edge_attr = normalize(
+            data=[x, edge_attr],
+            mean=[mean_vec_x, mean_vec_edge],
+            std=[std_vec_x, std_vec_edge]
+        )
 
         # step 1: encode node/edge features into latent node/edge embeddings
         x = self.node_encoder(x) # output shape is the specified hidden dimension
@@ -124,21 +129,23 @@ class MeshGraphNet(pl.LightningModule):
         # step 3: decode latent node embeddings into physical quantities of interest
         return self.decoder(x)
     
-    def loss(self, pred: torch.Tensor, inputs: Data, split: str) -> torch.Tensor:
+    def loss(
+        self,
+        pred: torch.Tensor,
+        inputs: Data,
+        mean_vec_y: torch.Tensor,
+        std_vec_y: torch.Tensor
+    ) -> torch.Tensor:
         """Calculate the loss for the given prediction and inputs."""
         # get the loss mask for the nodes of the types we calculate loss for
         loss_mask=torch.logical_or((torch.argmax(inputs.x[:,5:],dim=1)==torch.tensor(NodeType.NORMAL)),
                                    (torch.argmax(inputs.x[:,5:],dim=1)==torch.tensor(NodeType.OUTFLOW)))
 
-        # normalize target with dataset statistics
-        if split == 'train':
-            target_normalized = normalize(data=inputs.y, mean=self.mean_vec_y_train, std=self.std_vec_y_train)
-        elif split == 'val':
-            target_normalized = normalize(data=inputs.y, mean=self.mean_vec_y_val, std=self.std_vec_y_val)
-        elif split == 'test':
-            target_normalized = normalize(data=inputs.y, mean=self.mean_vec_y_test, std=self.std_vec_y_test)
-        else:
-            raise ValueError(f'Invalid split: {split}')
+        target_normalized = normalize(
+            data=inputs.y,
+            mean=mean_vec_y,
+            std=std_vec_y
+        )
 
         # find sum of square errors
         error = torch.sum((pred-target_normalized)**2, dim=1)
@@ -150,8 +157,19 @@ class MeshGraphNet(pl.LightningModule):
 
     def training_step(self, batch: Data, batch_idx: int) -> torch.Tensor:
         """Training step of the model."""
-        pred = self(batch, split='train')
-        loss = self.loss(pred, batch, split='train')
+        pred = self(
+            batch=batch,
+            mean_vec_x=self.mean_vec_x_train,
+            std_vec_x=self.std_vec_x_train,
+            mean_vec_edge=self.mean_vec_edge_train,
+            std_vec_edge=self.std_vec_edge_train
+        )
+        loss = self.loss(
+            pred=pred,
+            inputs=batch,
+            mean_vec_y=self.mean_vec_y_train,
+            std_vec_y=self.std_vec_y_train
+        )
         self.log('train/loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return loss
 
@@ -159,8 +177,19 @@ class MeshGraphNet(pl.LightningModule):
         """Validation step of the model."""
         if self.trainer.sanity_checking:
             self.load_stats()
-        pred = self(batch, split='val')
-        loss = self.loss(pred, batch, split='val')
+        pred = self(
+            batch=batch,
+            mean_vec_x=self.mean_vec_x_val,
+            std_vec_x=self.std_vec_x_val,
+            mean_vec_edge=self.mean_vec_edge_val,
+            std_vec_edge=self.std_vec_edge_val
+        )
+        loss = self.loss(
+            pred=pred,
+            inputs=batch,
+            mean_vec_y=self.mean_vec_y_val,
+            std_vec_y=self.std_vec_y_val
+        )
         self.log('valid/loss', loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
         return loss
 
