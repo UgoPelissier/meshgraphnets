@@ -168,25 +168,6 @@ class MeshGraphNet(pl.LightningModule):
         """Test step of the model."""
         self.load_stats()
 
-        if ((batch_idx%(self.time_step_lim//self.batch_size_test))==0):
-            self.data_list_true, self.data_list_prediction, self.data_list_error = [], [], []
-
-        if (self.test_index in self.test_indices):
-            pred = self(batch, split='test')
-            loss = self.loss(pred, batch, split='test')
-            self.log('test/loss', loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
-
-            data_list_true, data_list_prediction, data_list_error = self.rollout(batch, batch_idx)
-            self.data_list_true += data_list_true
-            self.data_list_prediction += data_list_prediction
-            self.data_list_error += data_list_error
-
-            if self.animate:
-                save_vtu(self.data_list_true, self.data_list_prediction, self.data_list_error, path=osp.join(self.logs, self.version), index=self.test_index)
-
-        if ((batch_idx%(self.time_step_lim//self.batch_size_test))==((self.time_step_lim//self.batch_size_test)-1)):
-            self.test_index += 1
-
     def configure_optimizers(self) -> Union[List[Optimizer], Tuple[List[Optimizer], None]]:
         """Configure the optimizer and the learning rate scheduler."""
         optimizer = self.optimizer(self.parameters())
@@ -203,42 +184,6 @@ class MeshGraphNet(pl.LightningModule):
         self.mean_vec_x_train, self.std_vec_x_train, self.mean_vec_edge_train, self.std_vec_edge_train, self.mean_vec_y_train, self.std_vec_y_train = train_stats
         self.mean_vec_x_val, self.std_vec_x_val, self.mean_vec_edge_val, self.std_vec_edge_val, self.mean_vec_y_val, self.std_vec_y_val = val_stats
         self.mean_vec_x_test, self.std_vec_x_test, self.mean_vec_edge_test, self.std_vec_edge_test, self.mean_vec_y_test, self.std_vec_y_test = test_stats
-
-    def rollout(self, batch: Data, batch_idx: int) -> Tuple[List[Data], List[Data], List[Data]]:
-        """Rollout trajectory."""
-        self.load_stats()
-
-        data_list_true = []
-        data_list_prediction = []
-        data_list_error = []
-
-        x_sizes = (batch.ptr[1:] - batch.ptr[:-1]).tolist()
-        edge_sizes = batch.n_edges.tolist()
-        cells_sizes = batch.n_cells.tolist()
-        i = 0
-        for x, edge_index, edge_attr, y, mesh_pos, cells in zip(batch.x.split(x_sizes), torch.transpose(batch.edge_index, 0, 1).split(edge_sizes), batch.edge_attr.split(edge_sizes), batch.y.split(x_sizes), batch.mesh_pos.split(x_sizes), batch.cells.split(cells_sizes)):
-            pred = self(Data(x=x, edge_index=torch.transpose(edge_index, 0, 1)-np.sum(np.array(x_sizes)[:i]), edge_attr=edge_attr), split='test')
-            pred = unnormalize(data=pred, mean=self.mean_vec_y_test, std=self.std_vec_y_test)
-
-            v = x[:, 0:2]
-            if (i==0):
-                prediction = v
-
-            true = copy.deepcopy(v)
-            prediction = copy.deepcopy(v)
-            error = copy.deepcopy(v)
-
-            true = v + y
-            prediction += pred
-            error = prediction - true
-
-            data_list_true.append(Data(x=true, mesh_pos=mesh_pos, cells=cells))
-            data_list_prediction.append(Data(x=prediction))
-            data_list_error.append(Data(x=error))
-
-            i += 1
-
-        return data_list_true, data_list_prediction, data_list_error
     
     def v_noise(self, batch: Data, noise_std: float) -> torch.Tensor:
         """Return noise to add to the velocity field."""
