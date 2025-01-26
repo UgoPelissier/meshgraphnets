@@ -16,31 +16,34 @@ class MyLightningCLI(LightningCLI):
         logger = {
             "class_path": "lightning.pytorch.loggers.TensorBoardLogger",
             "init_args": {
-                "save_dir": "/scratch-fast/upelissier/80-Tests/meshgraphnets/",
+                "save_dir": "/scratch-big/upelissier/80-Tests/meshgraphnetsacctime/",
                 "name": "logs/"
             },
         }
 
         parser.set_defaults(
             {
-                "data.data_dir": "/scratch-fast/upelissier/80-Tests/meshgraphnets/data/",
+                "data.data_dir": "/scratch-big/upelissier/80-Tests/meshgraphnetsacctime/data/",
                 "data.dataset_name": "cylinder_flow",
                 "data.field": "velocity",
                 "data.time_steps": 600,
-                "data.idx_lim_train": 95,
+                "data.idx_lim_train": 45,
                 "data.idx_lim_val": 3,
                 "data.idx_lim_test": 2,
                 "data.time_step_lim": 100,
                 "data.batch_size_train": 1,
                 "data.batch_size_valid": 1,
                 "data.batch_size_test": 1,
+                "data.input_dim_node": 14,
+                "data.input_dim_edge": 3,
+                "data.output_dim": 2,
 
-                "model.path": "/scratch-fast/upelissier/80-Tests/meshgraphnets/",
-                "model.dataset": "/scratch-fast/upelissier/80-Tests/meshgraphnets/data/",
-                "model.logs": "/scratch-fast/upelissier/80-Tests/meshgraphnets/logs/",
+                "model.path": "/scratch-big/upelissier/80-Tests/meshgraphnetsacctime/",
+                "model.dataset": "/scratch-big/upelissier/80-Tests/meshgraphnetsacctime/data/",
+                "model.logs": "/scratch-big/upelissier/80-Tests/meshgraphnetsacctime/logs/",
                 "model.noise_std": 2e-2,
                 "model.num_layers": 10,
-                "model.input_dim_node": 11,
+                "model.input_dim_node": 14,
                 "model.input_dim_edge": 3,
                 "model.hidden_dim": 64,
                 "model.output_dim": 2,
@@ -50,7 +53,7 @@ class MyLightningCLI(LightningCLI):
                 "model.batch_size_test": 1,
                 "model.animate": True,
 
-                "trainer.max_epochs": 1000,
+                "trainer.max_epochs": 100,
                 "trainer.accelerator": "gpu",
                 "trainer.devices": 1,
                 "trainer.check_val_every_n_epoch": 1,

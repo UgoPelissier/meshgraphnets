@@ -30,18 +30,22 @@ class NodeType(enum.IntEnum):
 
 
 class MeshDataset(Dataset):
-    def __init__(self,
-                 data_dir: str,
-                 dataset_name: str,
-                 field: str,
-                 time_steps: int,
-                 idx_lim_train: int,
-                 idx_lim_val: int,
-                 idx_lim_test: int,
-                 time_step_lim: int,
-                 split: str,
-                 transform: Optional[Callable] = None,
-                 pre_transform: Optional[Callable] = None
+    def __init__(
+        self,
+        data_dir: str,
+        dataset_name: str,
+        field: str,
+        time_steps: int,
+        idx_lim_train: int,
+        idx_lim_val: int,
+        idx_lim_test: int,
+        time_step_lim: int,
+        input_dim_node: int,
+        input_dim_edge: int,
+        output_dim: int,
+        split: str,
+        transform: Optional[Callable] = None,
+        pre_transform: Optional[Callable] = None
     ) -> None:
         self.split = split
         self.data_dir = data_dir
@@ -61,17 +65,21 @@ class MeshDataset(Dataset):
 
         self.eps = torch.tensor(1e-8)
 
+        self.input_dim_node = input_dim_node
+        self.input_dim_edge = input_dim_edge
+        self.output_dim = output_dim
+
         # mean and std of the node features are calculated
-        self.mean_vec_x = torch.zeros(11)
-        self.std_vec_x = torch.zeros(11)
+        self.mean_vec_x = torch.zeros(input_dim_node)
+        self.std_vec_x = torch.zeros(input_dim_node)
 
         # mean and std of the edge features are calculated
-        self.mean_vec_edge = torch.zeros(3)
-        self.std_vec_edge = torch.zeros(3)
+        self.mean_vec_edge = torch.zeros(input_dim_edge)
+        self.std_vec_edge = torch.zeros(input_dim_edge)
 
         # mean and std of the output parameters are calculated
-        self.mean_vec_y = torch.zeros(2)
-        self.std_vec_y = torch.zeros(2)
+        self.mean_vec_y = torch.zeros(output_dim)
+        self.std_vec_y = torch.zeros(output_dim)
 
         # define counters used in normalization
         self.num_accs_x  =  0
@@ -183,13 +191,17 @@ class MeshDataset(Dataset):
                 for key, value in data.items():
                         d[key] = torch.from_numpy(value.numpy()).squeeze(dim=0)
                 # extract data from each time step
-                for t in range(self.time_steps-1):
+                for t in range(1, self.time_steps-1):
                     if (t==self.time_step_lim):
                         break
                     # get node features
-                    v = d['velocity'][t, :, :]
+                    v_tm1 = d['velocity'][t-1, :, :]
+                    v_t = d['velocity'][t, :, :]
+                    a_t = (v_t-v_tm1)/self.dt
+                    time = torch.ones(len(d['mesh_pos']),1)*self.dt*t
+
                     node_type = torch.tensor(np.array(tf.one_hot(tf.convert_to_tensor(data['node_type'][0,:,0]), NodeType.SIZE)))
-                    x = torch.cat((v, node_type),dim=-1).type(torch.float)
+                    x = torch.cat((v_t, a_t, time, node_type),dim=-1).type(torch.float)
 
                     # get edge indices in COO format
                     edge_index = self.triangles_to_edges(d['cells']).long()
@@ -202,17 +214,27 @@ class MeshDataset(Dataset):
                     edge_attr = torch.cat((u_ij, u_ij_norm),dim=-1).type(torch.float)
 
                     # node outputs, for training (velocity)
-                    v_t = d['velocity'][t, :, :]
                     v_tp1 = d['velocity'][t+1, :, :]
                     y = (v_tp1-v_t).type(torch.float)
 
                     self.update_stats(x, edge_attr, y)
 
-                    torch.save(Data(x=x, edge_index=edge_index, edge_attr=edge_attr, y=y, cells=d['cells'], mesh_pos=d['mesh_pos'], n_points=x.shape[0], n_edges=edge_index.shape[1], n_cells=d['cells'].shape[0]),
-                                osp.join(self.processed_dir, self.split, f'data_{idx_data}.pt'))
+                    torch.save(
+                        Data(
+                            x=x,
+                            edge_index=edge_index,
+                            edge_attr=edge_attr,
+                            y=y,
+                            cells=d['cells'],
+                            mesh_pos=d['mesh_pos'],
+                            n_points=x.shape[0],
+                            n_edges=edge_index.shape[1],
+                            n_cells=d['cells'].shape[0]
+                        ),
+                        osp.join(self.processed_dir, self.split, f'data_{idx_data}.pt')
+                    )
                     idx_data += 1
                 bar()
-                    
         self.save_stats()
 
     def len(self) -> int:

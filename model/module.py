@@ -63,7 +63,6 @@ class MeshGraphNet(pl.LightningModule):
                                     #    Linear(hidden_dim, hidden_dim),
                                        LayerNorm(hidden_dim))
 
-
         self.processor = torch.nn.ModuleList()
         assert (self.num_layers >= 1), 'Number of message passing layers is not >=1'
 
@@ -96,11 +95,11 @@ class MeshGraphNet(pl.LightningModule):
     def build_processor_model(self):
         return ProcessorLayer
 
-    def forward(self, batch: Data, split: str):
+    def forward(self, batch: Data, split: str, batch_idx: int):
         """
         Encoder encodes graph (node/edge features) into latent vectors (node/edge embeddings)
         The return of processor is fed into the processor for generating new feature vectors
-        """
+        """ 
         x, edge_index, edge_attr = batch.x, batch.edge_index.long(), batch.edge_attr
         x[:,:2] += self.v_noise(batch, self.noise_std)
 
@@ -128,8 +127,8 @@ class MeshGraphNet(pl.LightningModule):
     def loss(self, pred: torch.Tensor, inputs: Data, split: str) -> torch.Tensor:
         """Calculate the loss for the given prediction and inputs."""
         # get the loss mask for the nodes of the types we calculate loss for
-        loss_mask=torch.logical_or((torch.argmax(inputs.x[:,2:],dim=1)==torch.tensor(NodeType.NORMAL)),
-                                   (torch.argmax(inputs.x[:,2:],dim=1)==torch.tensor(NodeType.OUTFLOW)))
+        loss_mask=torch.logical_or((torch.argmax(inputs.x[:,5:],dim=1)==torch.tensor(NodeType.NORMAL)),
+                                   (torch.argmax(inputs.x[:,5:],dim=1)==torch.tensor(NodeType.OUTFLOW)))
 
         # normalize target with dataset statistics
         if split == 'train':
@@ -151,7 +150,7 @@ class MeshGraphNet(pl.LightningModule):
 
     def training_step(self, batch: Data, batch_idx: int) -> torch.Tensor:
         """Training step of the model."""
-        pred = self(batch, split='train')
+        pred = self(batch, split='train', batch_idx=batch_idx)
         loss = self.loss(pred, batch, split='train')
         self.log('train/loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return loss
@@ -160,7 +159,7 @@ class MeshGraphNet(pl.LightningModule):
         """Validation step of the model."""
         if self.trainer.sanity_checking:
             self.load_stats()
-        pred = self(batch, split='val')
+        pred = self(batch, split='val', batch_idx=batch_idx)
         loss = self.loss(pred, batch, split='val')
         self.log('valid/loss', loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
         return loss
@@ -245,6 +244,9 @@ class MeshGraphNet(pl.LightningModule):
         """Return noise to add to the velocity field."""
         v = batch.x[:,:2]
         v_noise = torch.normal(std=noise_std, mean=0.0, size=v.shape).to(self.device)
-        mask = torch.argmax(batch.x[:,2:],dim=1)!=torch.tensor(NodeType.NORMAL)
+        mask = torch.logical_or(
+            (torch.argmax(batch.x[:,5:],dim=1)!=torch.tensor(NodeType.NORMAL)),
+            (torch.argmax(batch.x[:,5:],dim=1)!=torch.tensor(NodeType.OUTFLOW))
+        )
         v_noise[mask]=0
         return v_noise
