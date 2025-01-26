@@ -98,10 +98,10 @@ class MeshGraphNet(pl.LightningModule):
     def forward(
         self,
         batch: Data,
-        mean_vec_x: torch.Tensor,
-        std_vec_x: torch.Tensor,
-        mean_vec_edge: torch.Tensor,
-        std_vec_edge: torch.Tensor
+        mean_x: torch.Tensor,
+        std_x: torch.Tensor,
+        mean_edge: torch.Tensor,
+        std_edge: torch.Tensor
     ):
         """
         Encoder encodes graph (node/edge features) into latent vectors (node/edge embeddings)
@@ -113,8 +113,8 @@ class MeshGraphNet(pl.LightningModule):
         # step 0: normalize
         x, edge_attr = normalize(
             data=[x, edge_attr],
-            mean=[mean_vec_x, mean_vec_edge],
-            std=[std_vec_x, std_vec_edge]
+            mean=[mean_x, mean_edge],
+            std=[std_x, std_edge]
         )
 
         # step 1: encode node/edge features into latent node/edge embeddings
@@ -133,8 +133,8 @@ class MeshGraphNet(pl.LightningModule):
         self,
         pred: torch.Tensor,
         inputs: Data,
-        mean_vec_y: torch.Tensor,
-        std_vec_y: torch.Tensor
+        mean: torch.Tensor,
+        std: torch.Tensor
     ) -> torch.Tensor:
         """Calculate the loss for the given prediction and inputs."""
         # get the loss mask for the nodes of the types we calculate loss for
@@ -143,8 +143,8 @@ class MeshGraphNet(pl.LightningModule):
 
         target_normalized = normalize(
             data=inputs.y,
-            mean=mean_vec_y,
-            std=std_vec_y
+            mean=mean,
+            std=std
         )
 
         # find sum of square errors
@@ -159,16 +159,16 @@ class MeshGraphNet(pl.LightningModule):
         """Training step of the model."""
         pred = self(
             batch=batch,
-            mean_vec_x=self.mean_vec_x_train,
-            std_vec_x=self.std_vec_x_train,
-            mean_vec_edge=self.mean_vec_edge_train,
-            std_vec_edge=self.std_vec_edge_train
+            mean_x=self.mean_vec_x_train,
+            std_x=self.std_vec_x_train,
+            mean_edge=self.mean_vec_edge_train,
+            std_edge=self.std_vec_edge_train
         )
         loss = self.loss(
             pred=pred,
             inputs=batch,
-            mean_vec_y=self.mean_vec_y_train,
-            std_vec_y=self.std_vec_y_train
+            mean=self.mean_vec_x_train[:2],
+            std=self.std_vec_x_train[:2]
         )
         self.log('train/loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return loss
@@ -179,16 +179,16 @@ class MeshGraphNet(pl.LightningModule):
             self.load_stats()
         pred = self(
             batch=batch,
-            mean_vec_x=self.mean_vec_x_val,
-            std_vec_x=self.std_vec_x_val,
-            mean_vec_edge=self.mean_vec_edge_val,
-            std_vec_edge=self.std_vec_edge_val
+            mean_x=self.mean_vec_x_train,
+            std_x=self.std_vec_x_train,
+            mean_edge=self.mean_vec_edge_train,
+            std_edge=self.std_vec_edge_train
         )
         loss = self.loss(
             pred=pred,
             inputs=batch,
-            mean_vec_y=self.mean_vec_y_val,
-            std_vec_y=self.std_vec_y_val
+            mean=self.mean_vec_x_train[:2],
+            std=self.std_vec_x_train[:2]
         )
         self.log('valid/loss', loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
         return loss
