@@ -5,8 +5,6 @@ import json
 import numpy as np
 
 from utils.stats import normalize, unnormalize, load_stats
-from utils.utils import get_next_version
-from utils.vizu import save_vtu
 from data.dataset import NodeType
 from model.processor import ProcessorLayer
 
@@ -86,7 +84,6 @@ class MeshGraphNet(pl.LightningModule):
         self.batch_size_test = batch_size_test
         self.data_list_true, self.data_list_prediction, self.data_list_error = [], [], []
         self.animate = animate
-        self.version = f'version_{get_next_version(self.logs)}'
 
         with open(osp.join(self.dataset, 'raw', 'meta.json'), 'r') as fp:
             meta = json.loads(fp.read())
