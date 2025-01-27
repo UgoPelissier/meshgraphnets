@@ -177,7 +177,10 @@ class MeshDataset(Dataset):
         self.dt = meta['dt']
         # convert data to dict
         ds = tf.data.TFRecordDataset(osp.join(self.raw_dir, f'%s.tfrecord' % self.split))
-        ds = ds.map(functools.partial(self._parse, meta=meta), num_parallel_calls=8)
+        if (self.split=="train"):
+            ds = ds.map(functools.partial(self._parse, meta=meta), num_parallel_calls=8)
+        else:
+            ds = ds.map(functools.partial(self._parse, meta=meta), num_parallel_calls=1)
         ds = ds.prefetch(1)
 
         print(f'{self.split} dataset')
@@ -221,15 +224,14 @@ class MeshDataset(Dataset):
 
                     torch.save(
                         Data(
+                            mesh_pos=d['mesh_pos'],
+                            cells=d['cells'],
                             x=x,
                             edge_index=edge_index,
                             edge_attr=edge_attr,
                             y=y,
-                            cells=d['cells'],
-                            mesh_pos=d['mesh_pos'],
-                            n_points=x.shape[0],
-                            n_edges=edge_index.shape[1],
-                            n_cells=d['cells'].shape[0]
+                            traj=idx,
+                            time_step=t
                         ),
                         osp.join(self.processed_dir, self.split, f'data_{idx_data}.pt')
                     )
