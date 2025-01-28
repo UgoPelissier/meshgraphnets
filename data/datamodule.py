@@ -83,7 +83,7 @@ class MeshDataModule(pl.LightningDataModule):
         return DataLoader(self.train_ds, batch_size=self.batch_size_train, shuffle=True, num_workers=8)
 
     def val_dataloader(self):
-        return DataLoader(self.valid_ds, batch_size=self.batch_size_valid, shuffle=False, num_workers=8)
+        return DataLoader(self.valid_ds, batch_size=self.batch_size_valid, shuffle=False, num_workers=0)
     
     def test_dataloader(self):
-        return DataLoader(self.test_ds, batch_size=self.batch_size_test, shuffle=False, num_workers=8)
+        return DataLoader(self.test_ds, batch_size=self.batch_size_test, shuffle=False, num_workers=0)
