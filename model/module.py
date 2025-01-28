@@ -1,10 +1,12 @@
 import copy
 from typing import Optional, List, Tuple, Union
+import os
 import os.path as osp
 import json
 import numpy as np
 
 from utils.stats import normalize, unnormalize, load_stats
+from utils.save import convert_to_meshio_vtu, vtu_to_xdmf
 from data.dataset import NodeType
 from model.processor import ProcessorLayer
 
@@ -32,10 +34,6 @@ class MeshGraphNet(pl.LightningModule):
             hidden_dim: int,
             output_dim: int,
             optimizer: OptimizerCallable,
-            test_indices: List[int],
-            time_step_lim: int,
-            batch_size_test: int,
-            animate: bool,
             lr_scheduler: Optional[LRSchedulerCallable] = None
         ) -> None:
         super().__init__()
@@ -78,12 +76,14 @@ class MeshGraphNet(pl.LightningModule):
 
         self.optimizer = optimizer
         self.lr_scheduler = lr_scheduler
-        self.test_index = 0
-        self.test_indices = test_indices
-        self.time_step_lim = time_step_lim
-        self.batch_size_test = batch_size_test
-        self.data_list_true, self.data_list_prediction, self.data_list_error = [], [], []
-        self.animate = animate
+        
+        self.val_step_outputs = []
+        self.val_step_targets = []
+        self.current_val_trajectory = 0
+        self.last_val_prediction = None
+
+        # For one trajectory vizualization
+        self.trajectory_to_save: list[Data] = []
 
         with open(osp.join(self.dataset, 'raw', 'meta.json'), 'r') as fp:
             meta = json.loads(fp.read())
@@ -129,23 +129,26 @@ class MeshGraphNet(pl.LightningModule):
     def loss(
         self,
         pred: torch.Tensor,
-        inputs: Data,
-        mean: torch.Tensor,
-        std: torch.Tensor
+        target: torch.Tensor,
+        node_type: torch.Tensor,
+        mean: torch.Tensor = None,
+        std: torch.Tensor = None
     ) -> torch.Tensor:
-        """Calculate the loss for the given prediction and inputs."""
+        """Calculate the loss for the given prediction and target."""
         # get the loss mask for the nodes of the types we calculate loss for
-        loss_mask=torch.logical_or((torch.argmax(inputs.x[:,5:],dim=1)==torch.tensor(NodeType.NORMAL)),
-                                   (torch.argmax(inputs.x[:,5:],dim=1)==torch.tensor(NodeType.OUTFLOW)))
+        loss_mask=torch.logical_or((torch.argmax(node_type,dim=1)==torch.tensor(NodeType.NORMAL)),
+                                   (torch.argmax(node_type,dim=1)==torch.tensor(NodeType.OUTFLOW)))
 
-        target_normalized = normalize(
-            data=inputs.y,
-            mean=mean,
-            std=std
-        )
-
-        # find sum of square errors
-        error = torch.sum((pred-target_normalized)**2, dim=1)
+        if ((mean is not None) and (std is not None)):
+            target_normalized = normalize(
+                data=target,
+                mean=mean,
+                std=std
+            )
+            # find sum of square errors
+            error = torch.sum((pred-target_normalized)**2, dim=1)
+        else:
+            error = torch.sum((pred-target)**2, dim=1)
 
         # root and mean the errors for the nodes we calculate loss for
         loss= torch.sqrt(torch.mean(error[loss_mask]))
@@ -163,32 +166,113 @@ class MeshGraphNet(pl.LightningModule):
         )
         loss = self.loss(
             pred=pred,
-            inputs=batch,
+            target=batch.y,
+            node_type=batch.x[:,5:],
             mean=self.mean_vec_x_train[:2],
             std=self.std_vec_x_train[:2]
         )
         self.log('train/loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return loss
 
-    def validation_step(self, batch: Data, batch_idx: int) -> torch.Tensor:
+    def validation_step(self, batch: Data, batch_idx: int) -> None:
         """Validation step of the model."""
         if self.trainer.sanity_checking:
             self.load_stats()
-        pred = self(
-            batch=batch,
-            mean_x=self.mean_vec_x_train,
-            std_x=self.std_vec_x_train,
-            mean_edge=self.mean_vec_edge_train,
-            std_edge=self.std_vec_edge_train
+
+        # Determine if we need to reset the trajectory
+        if batch.traj > self.current_val_trajectory:
+            self.current_val_trajectory += 1
+            self.last_val_prediction = None
+
+        # Prepare the batch for the current step
+        batch = batch.clone()
+        if self.last_val_prediction is not None:
+            # Update the batch with the last prediction
+            batch.x[:,:2] = (self.last_val_prediction.detach())
+
+        if self.current_val_trajectory == 0:
+            self.trajectory_to_save.append(batch)
+
+        mask=torch.logical_or(
+            (torch.argmax(batch.x[:,5:],dim=1)==torch.tensor(NodeType.NORMAL)),
+            (torch.argmax(batch.x[:,5:],dim=1)==torch.tensor(NodeType.OUTFLOW))
         )
-        loss = self.loss(
-            pred=pred,
-            inputs=batch,
+        mask = torch.logical_not(mask)
+        node_type = batch.x[:,5:]
+        target_delta = batch.y
+
+        with torch.no_grad():
+            pred_delta_normalized = self(
+                batch=batch,
+                mean_x=self.mean_vec_x_train,
+                std_x=self.std_vec_x_train,
+                mean_edge=self.mean_vec_edge_train,
+                std_edge=self.std_vec_edge_train
+            )
+
+        pred_delta = unnormalize(
+            data=pred_delta_normalized,
             mean=self.mean_vec_x_train[:2],
             std=self.std_vec_x_train[:2]
         )
-        self.log('valid/loss', loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
-        return loss
+
+        pred = pred_delta + batch.x[:,:2]
+        target = target_delta + batch.x[:,:2]
+
+        # Apply mask to predicted outputs
+        pred[mask] = target[mask]
+        self.val_step_outputs.append(pred.cpu())
+        self.val_step_targets.append(target.cpu())
+
+        self.last_val_prediction = pred
+
+        loss = self.loss(
+            pred=pred,
+            target=batch.y,
+            node_type=node_type
+        )
+        self.log('valid/loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+
+    def on_validation_epoch_end(self):
+        # Concatenate outputs and targets
+        preds = torch.cat(self.val_step_outputs, dim=0)
+        targets = torch.cat(self.val_step_targets, dim=0)
+
+        # Compute RMSE over all rollouts
+        squared_diff = (preds - targets) ** 2
+        all_rollout_rmse = torch.sqrt(squared_diff.mean()).item()
+
+        self.log(
+            "val_all_rollout_rmse",
+            all_rollout_rmse,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=True,
+        )
+
+        # Save trajectory graphs as .vtu files
+        save_dir = osp.join("validation", f"epoch_{self.current_epoch}")
+        os.makedirs(save_dir, exist_ok=True)
+        for idx, graph in enumerate(self.trajectory_to_save):
+            try:
+                vtu = convert_to_meshio_vtu(graph)
+                # Construct filename
+                filename = osp.join(save_dir, f"graph_{idx}.vtu")
+                # Save the mesh
+                vtu.write(filename)
+            except Exception as e:
+                print(f"Error saving graph {idx} at epoch {self.current_epoch}: {e}")
+
+        # Convert vtu files to XDMF/H5 file
+        vtu_files = [osp.join(save_dir, f"graph_{idx}.vtu") for idx in range(len(self.trajectory_to_save))]
+        vtu_to_xdmf(osp.join(save_dir, f"graph_{graph.traj.cpu().numpy()[0]}"), vtu_files)
+
+        # Clear stored outputs
+        self.val_step_outputs.clear()
+        self.val_step_targets.clear()
+        self.current_val_trajectory = 0
+        self.last_val_prediction = None
+        self.trajectory_to_save.clear()
 
     def test_step(self, batch: Data, batch_idx: int) -> None:
         """Test step of the model."""
