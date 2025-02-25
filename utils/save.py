@@ -1,10 +1,7 @@
 import shutil
 import os
-from tqdm import tqdm
 import numpy as np
-import pyvista as pv
 import meshio
-import torch
 from torch_geometric.data import Data
 from typing import List
 
@@ -66,7 +63,7 @@ def vtu_to_xdmf(filename: str, filelist: List[str], timestep=1) -> None:
 
         # Loop through time steps and write data
         t = 0
-        for file in tqdm(filelist, desc='Compressing VTUs into XDMF files'):
+        for file in filelist:
             mesh = meshio.read(file)
             point_data = mesh.point_data
             cell_data = mesh.cell_data
@@ -75,7 +72,6 @@ def vtu_to_xdmf(filename: str, filelist: List[str], timestep=1) -> None:
 
     # The H5 archive is systematically created in cwd, we just need to move it
     shutil.move(src=os.path.join(os.getcwd(), os.path.split(h5_filename)[1]), dst=h5_filename)
-    print(f"Time series written to {xdmf_filename} and {h5_filename}")
 
     # Remove the temporary files
     for file in filelist:
